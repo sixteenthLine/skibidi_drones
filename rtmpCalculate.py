@@ -1,6 +1,8 @@
+import os
 import cv2
 import numpy as np
 import scipy.integrate as ode
+import time
 
 def worldToPixel(screen_w, height, length):
     w = length * 100
@@ -45,49 +47,45 @@ def calculateFall(height, wind_speed):
 
 
 def main():
-    rtmp_url = 'rtmp://192.168.31.23:1935/hls/live'  # Replace with your RTMP server URL
-
-    # Open a video capture object (for example, the default camera)
-    cap = cv2.VideoCapture(rtmp_url,cv2.CAP_IMAGES)  # Use 0 for the default camera, or provide a video file path
+    rtmp_url = 'rtmp://192.168.31.23:1933'
+    cap = cv2.VideoCapture(rtmp_url)
 
     if not cap.isOpened():
         print("Error: Could not open video stream.")
         return
 
-    # cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1200)
-    # cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 900)
-
-    # # Get the width and height of the video frames
-    # frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    # frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-    # # Define the codec and create a VideoWriter object for RTMP streaming
-    # fourcc = cv2.VideoWriter_fourcc(*'flv1')  # 'flv1' codec for RTMP streaming
-    # out = cv2.VideoWriter(rtmp_url, fourcc, 25, (frame_width, frame_height))
-
     fallOffset = None
+    lastTimeUpdate = time.time()
+    angleDeg = 0
     while True:
-        # Capture frame-by-frame
+        dt = time.time() - lastTimeUpdate
         ret, frame = cap.read()
+        lastTimeUpdate = time.time()
+        angleDeg = -45
 
         if not ret:
             print("Error: Failed to grab frame.")
             break
 
+        # frame = cv2.resize(frame, (1280, 720))
         height, width = frame.shape[:2]
-        center_x, center_y = width // 2, height // 2
 
         droneHeight = 100
         windSpeed = 5
 
         if fallOffset is None:
+            name = "./frame1.jpg"
+            cv2.imwrite(name, frame)
             fallOffset = calculateFall(droneHeight, windSpeed)
+        
         lineLength = worldToPixel(960, droneHeight, fallOffset[0])
         radius = int(abs(worldToPixel(960, droneHeight, fallOffset[1]) - lineLength))
-        center = (int(width / 2 + lineLength), height // 2)
+        lineX = lineLength * np.cos(np.deg2rad(angleDeg))
+        lineY = lineLength * np.sin(np.deg2rad(angleDeg))
+        center = (int(width / 2 + lineX), int(height / 2 + lineY))
 
         cv2.line(frame, (width // 2, height // 2), center, (255, 0, 0), 1)
-        cv2.circle(frame, center, radius, (0, 255, 0), 2)
+        cv2.circle(frame, center, radius, (0, 255, 0),  1, lineType=cv2.LINE_AA)
 
         cv2.imshow('Video Stream with Rectangle', frame)
 
